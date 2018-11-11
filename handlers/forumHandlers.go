@@ -7,21 +7,22 @@ import (
 	"net/http"
 	"strings"
 
-
-	"github.com/vikks15/ForumAPI/structs"
+	"ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
-func createForum(w http.ResponseWriter, r *http.Request) {
+func CreateForum(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
-	var newForum Forum
+	var newForum structs.Forum
 	json.NewDecoder(r.Body).Decode(&newForum) //request json to struct User
 	r.Body.Close()
 
@@ -44,7 +45,7 @@ func createForum(w http.ResponseWriter, r *http.Request) {
 		w.Write(response)
 	} else if err != nil && strings.Contains(err.Error(), "pq: duplicate key") {
 		w.WriteHeader(http.StatusConflict) //409
-		var existingForum Forum
+		var existingForum structs.Forum
 		row := db.QueryRow("SELECT * FROM forum WHERE slug = '" + newForum.Slug + "'")
 		scanErr := row.Scan(&existingForum.Slug, &existingForum.Title, &existingForum.User, &existingForum.Posts, &existingForum.Threads)
 		if scanErr != nil {
@@ -60,11 +61,13 @@ func createForum(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getForumDetails(w http.ResponseWriter, r *http.Request) {
+func GetForumDetails(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
@@ -72,7 +75,7 @@ func getForumDetails(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	row := db.QueryRow("SELECT * FROM forum WHERE slug = '" + vars["slug"] + "'")
-	var currentForum Forum
+	var currentForum structs.Forum
 	err = row.Scan(&currentForum.Slug, &currentForum.Title, &currentForum.User, &currentForum.Posts, &currentForum.Threads)
 
 	if err == nil {
@@ -94,11 +97,13 @@ func getForumDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getThreads(w http.ResponseWriter, r *http.Request) {
+func GetThreads(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	params := r.URL.Query()
@@ -125,8 +130,8 @@ func getThreads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var threadsArr []Thread
-	var currentThread Thread
+	var threadsArr []structs.Thread
+	var currentThread structs.Thread
 	var tmpVotes sql.NullInt64
 
 	sqlStatement := "SELECT * FROM thread WHERE forum = '" + vars["slug"] + "'"
@@ -169,7 +174,7 @@ func getThreads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if threadsArr == nil {
-		var emptyThreadArr [0]Thread
+		var emptyThreadArr [0]structs.Thread
 		response, _ := json.Marshal(emptyThreadArr)
 		w.Write(response)
 	} else {
@@ -178,11 +183,13 @@ func getThreads(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getForumUsers(w http.ResponseWriter, r *http.Request) {
+func GetForumUsers(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	params := r.URL.Query()
@@ -210,8 +217,8 @@ func getForumUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var usersArr []User
-	var currentUser User
+	var usersArr []structs.User
+	var currentUser structs.User
 	sinceStatement := ""
 
 	if since != "" && desc == "true" {
@@ -256,7 +263,7 @@ func getForumUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if usersArr == nil {
-		var emptyUsersArr [0]User
+		var emptyUsersArr [0]structs.User
 		response, _ := json.Marshal(emptyUsersArr)
 		w.Write(response)
 	} else {

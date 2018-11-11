@@ -7,22 +7,24 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/vikks15/ForumAPI/structs"
-	
+	"ForumAPI/structs"
+
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
-func createVote(w http.ResponseWriter, r *http.Request) {
+func CreateVote(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var newVote Vote
-	var votedThread Thread
+	var newVote structs.Vote
+	var votedThread structs.Thread
 	json.NewDecoder(r.Body).Decode(&newVote) //request json to struct User
 	r.Body.Close()
 

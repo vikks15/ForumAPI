@@ -7,37 +7,36 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/vikks15/ForumAPI/structs"
-	
+	"ForumAPI/structs"
+
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
-func userProfileHandler(w http.ResponseWriter, r *http.Request) {
+func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
-
-	// var db *sql.DB = connectToDB()
-	// var err error
 
 	vars := mux.Vars(r)
 	//nickname := strings.TrimSuffix(strings.TrimPrefix(r.URL.String(), "/user/"), "/profile")
-	var printUser User
+	var printUser structs.User
 	w.Header().Set("Content-Type", "application/json")
 	w.Header()["Date"] = nil
 
 	switch r.Method {
 	case "GET":
 		row := db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + vars["nickname"] + "'")
-		var currentUser User
+		var currentUser structs.User
 		err = row.Scan(&currentUser.Nickname, &currentUser.FullName, &currentUser.About, &currentUser.Email)
 		printUser = currentUser
 	case "POST":
-		var userDataToUpdate User
-		var updatedUser User
+		var userDataToUpdate structs.User
+		var updatedUser structs.User
 		json.NewDecoder(r.Body).Decode(&userDataToUpdate)
 		r.Body.Close()
 
@@ -119,15 +118,17 @@ func userProfileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createUser(w http.ResponseWriter, r *http.Request) {
+func CreateUser(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var newUser User
+	var newUser structs.User
 	newUser.Nickname = vars["nickname"]
 	json.NewDecoder(r.Body).Decode(&newUser) //request json to struct User
 	r.Body.Close()
@@ -142,25 +143,25 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		//fmt.Println(err.Error())
 		w.WriteHeader(http.StatusConflict)
-		var existingUser1 User
-		var existingUser2 User
+		var existingUser1 structs.User
+		var existingUser2 structs.User
 		//row := db.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "' OR nickname = '" + newUser.Nickname + "'")
 		row1 := db.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "'")
 		row2 := db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + newUser.Nickname + "'")
 		_ = row1.Scan(&existingUser1.Nickname, &existingUser1.FullName, &existingUser1.About, &existingUser1.Email)
 		_ = row2.Scan(&existingUser2.Nickname, &existingUser2.FullName, &existingUser2.About, &existingUser2.Email)
-		var arr []User
+		var arr []structs.User
 
-		if (existingUser1 == (User{})) || (existingUser1 == existingUser2) {
-			arr = []User{
+		if (existingUser1 == (structs.User{})) || (existingUser1 == existingUser2) {
+			arr = []structs.User{
 				existingUser2,
 			}
-		} else if existingUser2 == (User{}) {
-			arr = []User{
+		} else if existingUser2 == (structs.User{}) {
+			arr = []structs.User{
 				existingUser1,
 			}
 		} else {
-			arr = []User{
+			arr = []structs.User{
 				existingUser1,
 				existingUser2,
 			}

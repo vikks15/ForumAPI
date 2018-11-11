@@ -9,21 +9,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vikks15/ForumAPI/structs"
+	"ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
-func createThread(w http.ResponseWriter, r *http.Request) {
+func CreateThread(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	//vars := mux.Vars(r)
-	var newThread Thread
+	var newThread structs.Thread
 	forumUpdateQuery := ""
 	json.NewDecoder(r.Body).Decode(&newThread) //request json to struct User
 	r.Body.Close()
@@ -79,7 +81,7 @@ func createThread(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		fmt.Print("\n")
 		w.WriteHeader(http.StatusConflict) //409
-		var existingThread Thread
+		var existingThread structs.Thread
 		existingThread.Id = newThread.Id
 		row := db.QueryRow("SELECT * FROM thread WHERE id = '" + strconv.Itoa(existingThread.Id) + "'")
 		scanErr1 := row.Scan(&existingThread.Title, &existingThread.Author, &existingThread.Forum, &existingThread.Message, &existingThread.Created)
@@ -98,7 +100,7 @@ func createThread(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		fmt.Print("\n")
 
-		var existingThread Thread
+		var existingThread structs.Thread
 		row := db.QueryRow("SELECT id, title, author, forum, message, slug, created FROM thread WHERE slug = '" + newThread.Slug + "'")
 		scanErr2 := row.Scan(&existingThread.Id, &existingThread.Title, &existingThread.Author, &existingThread.Forum, &existingThread.Message, &existingThread.Slug, &existingThread.Created)
 
@@ -119,15 +121,17 @@ func createThread(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getThreadDetails(w http.ResponseWriter, r *http.Request) {
+func GetThreadDetails(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var currentThread Thread
+	var currentThread structs.Thread
 	r.Body.Close()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -156,15 +160,17 @@ func getThreadDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func updateThreadDatails(w http.ResponseWriter, r *http.Request) {
+func UpdateThreadDatails(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var currentThread Thread
+	var currentThread structs.Thread
 	numFieldsToUpdate := 0
 	json.NewDecoder(r.Body).Decode(&currentThread) //request json to struct User
 	r.Body.Close()
@@ -173,7 +179,7 @@ func updateThreadDatails(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 	sqlStatement := ""
 	returnFields := ""
-	emptyThread := Thread{}
+	emptyThread := structs.Thread{}
 
 	if currentThread == emptyThread {
 		sqlStatement = "SELECT * FROM thread "
@@ -216,11 +222,13 @@ func updateThreadDatails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getThreadPosts(w http.ResponseWriter, r *http.Request) {
+func GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	params := r.URL.Query()
@@ -233,8 +241,8 @@ func getThreadPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	vars := mux.Vars(r)
-	var postsInThread []Post
-	var currentPost Post
+	var postsInThread []structs.Post
+	var currentPost structs.Post
 	identific := ""
 	sqlStatement := ""
 	curThreadId := 0
@@ -394,7 +402,7 @@ func getThreadPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if postsInThread == nil {
-		var emptyThread [0]Thread
+		var emptyThread [0]structs.Thread
 		response, _ := json.Marshal(emptyThread)
 		w.Write(response)
 	} else {

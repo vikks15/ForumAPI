@@ -24,6 +24,7 @@ COPY forumTables.sql forumTables.sql
 RUN /etc/init.d/postgresql start &&\
     psql --command "CREATE USER docker WITH SUPERUSER PASSWORD 'docker';" &&\
     createdb -O docker docker &&\
+    psql -d docker -f forumTables.sql &&\
     /etc/init.d/postgresql stop
 
 # Adjust PostgreSQL configuration so that remote connections to the
@@ -69,5 +70,4 @@ RUN go install .
 EXPOSE 5000
 
 # Запускаем PostgreSQL и сервер
-CMD service postgresql start &&\
-    ForumAPI
+CMD service postgresql start && go run main.go

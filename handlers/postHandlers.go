@@ -10,21 +10,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vikks15/ForumAPI/structs"
+	"ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 )
 
-func createPost(w http.ResponseWriter, r *http.Request) {
+func CreatePost(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var newPosts []Post
-	var addedPosts []Post
+	var newPosts []structs.Post
+	var addedPosts []structs.Post
 	forumUpdateQuery := ""
 	err = json.NewDecoder(r.Body).Decode(&newPosts) //request json to struct User
 	r.Body.Close()
@@ -176,7 +178,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 
 	if numOfPosts == 0 {
 		w.WriteHeader(http.StatusCreated)
-		var emptyPostArr [0]Post
+		var emptyPostArr [0]structs.Post
 		response, _ := json.Marshal(emptyPostArr)
 		w.Write(response)
 		return
@@ -187,15 +189,17 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getPostDetails(w http.ResponseWriter, r *http.Request) {
+func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var currentPost Post
+	var currentPost structs.Post
 	params := r.URL.Query()
 	related := params.Get("related")
 
@@ -212,10 +216,10 @@ func getPostDetails(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		w.WriteHeader(http.StatusOK)
 		var response []byte
-		var postRelated PostRelated
+		var postRelated structs.PostRelated
 
 		if strings.Contains(related, "user") {
-			var postAuthor User
+			var postAuthor structs.User
 			row = db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + currentPost.Author + "'")
 			userScanErr := row.Scan(&postAuthor.Nickname, &postAuthor.FullName, &postAuthor.About, &postAuthor.Email)
 
@@ -227,7 +231,7 @@ func getPostDetails(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if strings.Contains(related, "forum") {
-			var postForum Forum
+			var postForum structs.Forum
 			row = db.QueryRow("SELECT * FROM forum WHERE slug = '" + currentPost.Forum + "'")
 			forumScanErr := row.Scan(&postForum.Slug, &postForum.Title, &postForum.User, &postForum.Posts, &postForum.Threads)
 
@@ -239,7 +243,7 @@ func getPostDetails(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if strings.Contains(related, "thread") {
-			var postThread Thread
+			var postThread structs.Thread
 			row = db.QueryRow(`SELECT * FROM thread WHERE id = $1`, currentPost.Thread)
 			threadScanErr := row.Scan(&postThread.Id, &postThread.Title, &postThread.Author, &postThread.Forum, &postThread.Message, &postThread.Votes, &postThread.Slug, &postThread.Created)
 
@@ -264,17 +268,19 @@ func getPostDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func updatePostDetails(w http.ResponseWriter, r *http.Request) {
+func UpdatePostDetails(w http.ResponseWriter, r *http.Request) {
 	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME)
+		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
 	db, err := sql.Open("postgres", dbinfo)
-	checkErr(err)
+	if err != nil {
+		panic(err)
+	}
 	defer db.Close()
 
 	vars := mux.Vars(r)
-	var postWithUpdate Post
-	var prevPost Post
-	var currentPost Post
+	var postWithUpdate structs.Post
+	var prevPost structs.Post
+	var currentPost structs.Post
 
 	json.NewDecoder(r.Body).Decode(&postWithUpdate) //request json to struct User
 	r.Body.Close()
