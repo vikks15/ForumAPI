@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vikks15/ForumAPI/handlers"
+	"github.com/vikks15/ForumAPI/structs"
 	"github.com/gorilla/mux"
 )
 

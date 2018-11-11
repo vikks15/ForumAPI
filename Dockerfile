@@ -69,4 +69,5 @@ RUN go install .
 EXPOSE 5000
 
 # Запускаем PostgreSQL и сервер
-CMD service postgresql start && go run *.go
+CMD service postgresql start &&\
+    ForumAPI

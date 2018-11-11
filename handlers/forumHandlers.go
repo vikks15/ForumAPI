@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"database/sql"
@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+
+	"github.com/vikks15/ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
