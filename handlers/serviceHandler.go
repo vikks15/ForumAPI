@@ -1,11 +1,12 @@
 package handlers
 
 import (
-	"ForumAPI/structs"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/vikks15/ForumAPI/structs"
 
 	_ "github.com/lib/pq"
 )

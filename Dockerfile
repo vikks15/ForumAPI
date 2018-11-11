@@ -43,7 +43,6 @@ VOLUME  ["/etc/postgresql", "/var/log/postgresql", "/var/lib/postgresql"]
 # Back to the root user
 USER root
 
-
 # Сборка проекта
 
 # Установка golang

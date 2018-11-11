@@ -7,9 +7,9 @@ import (
 const (
 	DB_HOST     = "127.0.0.1"
 	DB_PORT     = "5432"
-	DB_USER     = "postgres"
-	DB_PASSWORD = "vl12345"
-	DB_NAME     = "Forum"
+	DB_USER     = "docker"
+	DB_PASSWORD = "docker"
+	DB_NAME     = "docker"
 )
 
 type User struct {

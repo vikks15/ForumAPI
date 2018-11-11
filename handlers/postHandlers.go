@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"ForumAPI/structs"
+	"github.com/vikks15/ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 )

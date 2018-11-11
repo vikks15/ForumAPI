@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ForumAPI/structs"
+	"github.com/vikks15/ForumAPI/structs"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
