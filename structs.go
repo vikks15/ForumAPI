@@ -5,9 +5,11 @@ import (
 )
 
 const (
-	DB_USER     = "postgres"
-	DB_PASSWORD = "123"
-	DB_NAME     = "Forum"
+	DB_HOST     = "127.0.0.1"
+	DB_PORT     = "5432"
+	DB_USER     = "docker"
+	DB_PASSWORD = "docker"
+	DB_NAME     = "docker"
 )
 
 type User struct {
@@ -24,14 +26,6 @@ type Forum struct {
 	Posts   int    `json:"posts"`
 	Threads int    `json:"threads"`
 }
-
-// type ForumFullInfo struct {
-// 	Slug    string `json:"slug"`
-// 	Title   string `json:"title"`
-// 	User    string `json:"user"`
-// 	Posts   int    `json:"posts"`
-// 	Threads int    `json:"threads"`
-// }
 
 type Thread struct {
 	Id      int       `json:"id"`
