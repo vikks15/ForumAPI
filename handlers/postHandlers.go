@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,20 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vikks15/ForumAPI/structs"
-
 	"github.com/gorilla/mux"
+	"github.com/vikks15/ForumAPI/structs"
 )
 
-func CreatePost(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var newPosts []structs.Post
 	var addedPosts []structs.Post
@@ -46,7 +37,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	//get 5 parent posts
 	sqlStatement := "SELECT id FROM post ORDER BY id DESC LIMIT 1"
-	row1 := db.QueryRow(sqlStatement)
+	row1 := env.DB.QueryRow(sqlStatement)
 
 	err = row1.Scan(&lastPostId)
 	if err != nil {
@@ -69,7 +60,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sqlStatement = "SELECT id, forum FROM thread WHERE slug = '" + vars["slug_or_id"] + "'"
 	}
-	row1 = db.QueryRow(sqlStatement)
+	row1 = env.DB.QueryRow(sqlStatement)
 	scanErr := row1.Scan(&curPostThread, &curPostForum)
 
 	if scanErr != nil {
@@ -90,7 +81,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		previousPath := ""
 
 		//---------------------User case check--------------
-		row := db.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + post.Author + "'")
+		row := env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + post.Author + "'")
 		scanErr := row.Scan(&post.Author)
 
 		if scanErr != nil {
@@ -109,7 +100,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		sqlStatement = `INSERT INTO post (author, message, thread, forum, created, parent)
 		VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
 
-		preInsertRow := db.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		preInsertRow := env.DB.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		err = preInsertRow.Scan(&post.Id)
 
 		if err != nil {
@@ -125,7 +116,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 
 		if strconv.Itoa(post.Parent) != "0" {
 			sqlStatement = "SELECT thread, path FROM post where id = " + strconv.Itoa(post.Parent)
-			row := db.QueryRow(sqlStatement)
+			row := env.DB.QueryRow(sqlStatement)
 			err = row.Scan(&parentThread, &previousPath)
 
 			if err != nil {
@@ -150,7 +141,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		SET path = $1
 		WHERE id = $2`
 		//_, err = db.Exec(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
-		_, err = db.Exec(sqlStatement, post.Path, post.Id)
+		_, err = env.DB.Exec(sqlStatement, post.Path, post.Id)
 
 		if err != nil {
 			fmt.Print("\n Create post update path err:")
@@ -158,7 +149,7 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		forumUpdateQuery = "UPDATE forum SET posts = posts + 1 WHERE slug = '" + post.Forum + "'"
-		_, err = db.Exec(forumUpdateQuery)
+		_, err = env.DB.Exec(forumUpdateQuery)
 
 		if err != nil {
 			fmt.Print("forum Update posts num err:")
@@ -189,15 +180,8 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetPostDetails(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetPostDetails(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var currentPost structs.Post
 	params := r.URL.Query()
@@ -210,7 +194,7 @@ func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	sqlStatement := "SELECT * FROM post WHERE id = " + vars["id"]
-	row := db.QueryRow(sqlStatement)
+	row := env.DB.QueryRow(sqlStatement)
 	err = row.Scan(&currentPost.Id, &currentPost.Parent, &currentPost.Author, &currentPost.Message, &currentPost.IsEdited, &currentPost.Forum, &currentPost.Thread, &currentPost.Created, &currentPost.Path)
 
 	if err == nil {
@@ -220,7 +204,7 @@ func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 
 		if strings.Contains(related, "user") {
 			var postAuthor structs.User
-			row = db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + currentPost.Author + "'")
+			row = env.DB.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + currentPost.Author + "'")
 			userScanErr := row.Scan(&postAuthor.Nickname, &postAuthor.FullName, &postAuthor.About, &postAuthor.Email)
 
 			if userScanErr != nil {
@@ -232,7 +216,7 @@ func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 
 		if strings.Contains(related, "forum") {
 			var postForum structs.Forum
-			row = db.QueryRow("SELECT * FROM forum WHERE slug = '" + currentPost.Forum + "'")
+			row = env.DB.QueryRow("SELECT * FROM forum WHERE slug = '" + currentPost.Forum + "'")
 			forumScanErr := row.Scan(&postForum.Slug, &postForum.Title, &postForum.User, &postForum.Posts, &postForum.Threads)
 
 			if forumScanErr != nil {
@@ -244,7 +228,7 @@ func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 
 		if strings.Contains(related, "thread") {
 			var postThread structs.Thread
-			row = db.QueryRow(`SELECT * FROM thread WHERE id = $1`, currentPost.Thread)
+			row = env.DB.QueryRow(`SELECT * FROM thread WHERE id = $1`, currentPost.Thread)
 			threadScanErr := row.Scan(&postThread.Id, &postThread.Title, &postThread.Author, &postThread.Forum, &postThread.Message, &postThread.Votes, &postThread.Slug, &postThread.Created)
 
 			if threadScanErr != nil {
@@ -268,15 +252,8 @@ func GetPostDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func UpdatePostDetails(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) UpdatePostDetails(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var postWithUpdate structs.Post
 	var prevPost structs.Post
@@ -289,7 +266,7 @@ func UpdatePostDetails(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	sqlStatement := "SELECT * FROM post WHERE id = " + vars["id"]
-	row := db.QueryRow(sqlStatement)
+	row := env.DB.QueryRow(sqlStatement)
 	err = row.Scan(&prevPost.Id, &prevPost.Parent, &prevPost.Author, &prevPost.Message, &prevPost.IsEdited, &prevPost.Forum, &prevPost.Thread, &prevPost.Created, &prevPost.Path)
 
 	if err != nil {
@@ -299,7 +276,7 @@ func UpdatePostDetails(w http.ResponseWriter, r *http.Request) {
 
 	if prevPost.Message != postWithUpdate.Message && postWithUpdate.Message != "" {
 		sqlUpdateStatement := "UPDATE post SET message = '" + postWithUpdate.Message + "', isedited = true WHERE id = " + vars["id"] + " RETURNING *"
-		row = db.QueryRow(sqlUpdateStatement)
+		row = env.DB.QueryRow(sqlUpdateStatement)
 		err = row.Scan(&currentPost.Id, &currentPost.Parent, &currentPost.Author, &currentPost.Message, &currentPost.IsEdited, &currentPost.Forum, &currentPost.Thread, &currentPost.Created, &currentPost.Path)
 	} else {
 		currentPost = prevPost

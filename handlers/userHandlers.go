@@ -4,23 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
-	"github.com/vikks15/ForumAPI/structs"
-
 	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/vikks15/ForumAPI/structs"
 )
 
-func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
+func (env *Env) UserProfileHandler(w http.ResponseWriter, r *http.Request) {
+	var err error
 
 	vars := mux.Vars(r)
 	//nickname := strings.TrimSuffix(strings.TrimPrefix(r.URL.String(), "/user/"), "/profile")
@@ -30,7 +21,7 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		row := db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + vars["nickname"] + "'")
+		row := env.DB.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + vars["nickname"] + "'")
 		var currentUser structs.User
 		err = row.Scan(&currentUser.Nickname, &currentUser.FullName, &currentUser.About, &currentUser.Email)
 		printUser = currentUser
@@ -66,7 +57,7 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if countFields != 0 {
 			sqlStatement += " WHERE nickname = '" + userDataToUpdate.Nickname + "'"
-			res, execErr = db.Exec(sqlStatement)
+			res, execErr = env.DB.Exec(sqlStatement)
 		} else {
 			sqlStatement = ""
 		}
@@ -77,7 +68,7 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 			var userWithSameNick string
 			w.WriteHeader(http.StatusConflict)
 			//sameEmailUser := db.Model(User).Column("nickname").Where("email = ?", updatedUser.Email).Select()
-			sameEmailUser := db.QueryRow("SELECT nickname FROM forumUser WHERE email = '" + printUser.Email + "'")
+			sameEmailUser := env.DB.QueryRow("SELECT nickname FROM forumUser WHERE email = '" + printUser.Email + "'")
 			err = sameEmailUser.Scan(&userWithSameNick)
 			errorMsg := map[string]string{"This email is already registered by user": userWithSameNick}
 			response, _ := json.Marshal(errorMsg)
@@ -94,7 +85,7 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 			var errNoUser = errors.New("no User")
 			err = errNoUser
 		} else {
-			row := db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + vars["nickname"] + "'")
+			row := env.DB.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + vars["nickname"] + "'")
 			err = row.Scan(&updatedUser.Nickname, &updatedUser.FullName, &updatedUser.About, &updatedUser.Email)
 
 			if err == nil {
@@ -118,15 +109,8 @@ func UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func CreateUser(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var newUser structs.User
 	newUser.Nickname = vars["nickname"]
@@ -138,7 +122,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	sqlStatement := `INSERT INTO forumUser (nickname, fullname, about, email) VALUES ($1,$2,$3,$4)`
 	//_, err = db.Exec("INSERT INTO forumUser (nickname, fullname, about, email) VALUES ('" + newUser.Nickname + "','" + newUser.FullName + "','" + newUser.About + "','" + newUser.Email + "');")
-	_, err = db.Exec(sqlStatement, newUser.Nickname, newUser.FullName, newUser.About, newUser.Email)
+	_, err = env.DB.Exec(sqlStatement, newUser.Nickname, newUser.FullName, newUser.About, newUser.Email)
 
 	if err != nil {
 		//fmt.Println(err.Error())
@@ -146,8 +130,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		var existingUser1 structs.User
 		var existingUser2 structs.User
 		//row := db.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "' OR nickname = '" + newUser.Nickname + "'")
-		row1 := db.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "'")
-		row2 := db.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + newUser.Nickname + "'")
+		row1 := env.DB.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "'")
+		row2 := env.DB.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + newUser.Nickname + "'")
 		_ = row1.Scan(&existingUser1.Nickname, &existingUser1.FullName, &existingUser1.About, &existingUser1.Email)
 		_ = row2.Scan(&existingUser2.Nickname, &existingUser2.FullName, &existingUser2.About, &existingUser2.Email)
 		var arr []structs.User

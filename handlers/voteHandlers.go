@@ -1,27 +1,16 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
-	"github.com/vikks15/ForumAPI/structs"
-
 	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/vikks15/ForumAPI/structs"
 )
 
-func CreateVote(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) CreateVote(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	var newVote structs.Vote
 	var votedThread structs.Thread
@@ -38,7 +27,7 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 		sqlStatement = `SELECT id FROM thread WHERE slug = $1`
 	}
 
-	row := db.QueryRow(sqlStatement, vars["slug_or_id"])
+	row := env.DB.QueryRow(sqlStatement, vars["slug_or_id"])
 	scanErr := row.Scan(&newVote.ThreadId)
 
 	if scanErr != nil {
@@ -57,7 +46,7 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 					VALUES ($1,$2,$3)
 					ON CONFLICT (nickname, threadId) DO UPDATE
 					SET voice = $2`
-	_, err = db.Exec(sqlStatement, newVote.Nickname, newVote.Voice, newVote.ThreadId)
+	_, err := env.DB.Exec(sqlStatement, newVote.Nickname, newVote.Voice, newVote.ThreadId)
 
 	if err != nil {
 		fmt.Print(err)
@@ -72,14 +61,14 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 					(select sum(voice) from vote where threadId = $1)
 					where id = $1`
 
-	_, err = db.Exec(sqlStatement, newVote.ThreadId)
+	_, err = env.DB.Exec(sqlStatement, newVote.ThreadId)
 
 	if err != nil {
 		fmt.Print("update votedThreadErr: ")
 		fmt.Print(err)
 		fmt.Print("\n")
 	} else {
-		row := db.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM vote JOIN thread ON (threadId = id) where id = " + strconv.Itoa(newVote.ThreadId))
+		row := env.DB.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM vote JOIN thread ON (threadId = id) where id = " + strconv.Itoa(newVote.ThreadId))
 		scanErr := row.Scan(&votedThread.Id, &votedThread.Title, &votedThread.Author, &votedThread.Forum, &votedThread.Message, &votedThread.Votes, &votedThread.Slug, &votedThread.Created)
 
 		if scanErr != nil {

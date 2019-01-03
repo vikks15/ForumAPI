@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,22 +8,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vikks15/ForumAPI/structs"
-
 	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/vikks15/ForumAPI/structs"
 )
 
-func CreateThread(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) CreateThread(w http.ResponseWriter, r *http.Request) {
 	//vars := mux.Vars(r)
+	var err error
 	var newThread structs.Thread
 	forumUpdateQuery := ""
 	json.NewDecoder(r.Body).Decode(&newThread) //request json to struct User
@@ -34,11 +24,11 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	sqlStatement := `INSERT INTO thread (title, author, forum, message, slug, created) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
-	row := db.QueryRow(sqlStatement, newThread.Title, newThread.Author, newThread.Forum, newThread.Message, newThread.Slug, newThread.Created.UTC())
+	row := env.DB.QueryRow(sqlStatement, newThread.Title, newThread.Author, newThread.Forum, newThread.Message, newThread.Slug, newThread.Created.UTC())
 	err = row.Scan(&newThread.Id)
 
 	//---------------User case check-----------------
-	row = db.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newThread.Author + "'")
+	row = env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newThread.Author + "'")
 	scanErr := row.Scan(&newThread.Author)
 
 	if scanErr != nil || newThread.Author == "" {
@@ -54,7 +44,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil {
 		//Forum case check
-		row = db.QueryRow("SELECT slug FROM forum WHERE slug = '" + newThread.Forum + "'")
+		row = env.DB.QueryRow("SELECT slug FROM forum WHERE slug = '" + newThread.Forum + "'")
 		scanErr = row.Scan(&newThread.Forum)
 
 		if scanErr != nil {
@@ -64,7 +54,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		}
 
 		forumUpdateQuery = "UPDATE forum SET threads = threads + 1 WHERE slug = '" + newThread.Forum + "'"
-		_, err = db.Exec(forumUpdateQuery)
+		_, err = env.DB.Exec(forumUpdateQuery)
 
 		if err != nil {
 			fmt.Print("forum Update threads num err:")
@@ -83,7 +73,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict) //409
 		var existingThread structs.Thread
 		existingThread.Id = newThread.Id
-		row := db.QueryRow("SELECT * FROM thread WHERE id = '" + strconv.Itoa(existingThread.Id) + "'")
+		row := env.DB.QueryRow("SELECT * FROM thread WHERE id = '" + strconv.Itoa(existingThread.Id) + "'")
 		scanErr1 := row.Scan(&existingThread.Title, &existingThread.Author, &existingThread.Forum, &existingThread.Message, &existingThread.Created)
 
 		if scanErr1 != nil {
@@ -101,7 +91,7 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 		fmt.Print("\n")
 
 		var existingThread structs.Thread
-		row := db.QueryRow("SELECT id, title, author, forum, message, slug, created FROM thread WHERE slug = '" + newThread.Slug + "'")
+		row := env.DB.QueryRow("SELECT id, title, author, forum, message, slug, created FROM thread WHERE slug = '" + newThread.Slug + "'")
 		scanErr2 := row.Scan(&existingThread.Id, &existingThread.Title, &existingThread.Author, &existingThread.Forum, &existingThread.Message, &existingThread.Slug, &existingThread.Created)
 
 		if scanErr2 != nil {
@@ -121,15 +111,8 @@ func CreateThread(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetThreadDetails(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetThreadDetails(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var currentThread structs.Thread
 	r.Body.Close()
@@ -143,7 +126,7 @@ func GetThreadDetails(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sqlStatement = `SELECT * FROM thread WHERE slug = $1`
 	}
-	row := db.QueryRow(sqlStatement, vars["slug_or_id"])
+	row := env.DB.QueryRow(sqlStatement, vars["slug_or_id"])
 	err = row.Scan(&currentThread.Id, &currentThread.Title, &currentThread.Author, &currentThread.Forum, &currentThread.Message, &currentThread.Votes, &currentThread.Slug, &currentThread.Created)
 
 	if err == nil {
@@ -160,15 +143,8 @@ func GetThreadDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func UpdateThreadDatails(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) UpdateThreadDatails(w http.ResponseWriter, r *http.Request) {
+	var err error
 	vars := mux.Vars(r)
 	var currentThread structs.Thread
 	numFieldsToUpdate := 0
@@ -205,7 +181,7 @@ func UpdateThreadDatails(w http.ResponseWriter, r *http.Request) {
 		sqlStatement += " WHERE slug = '" + vars["slug_or_id"] + "'" + returnFields
 	}
 
-	row := db.QueryRow(sqlStatement)
+	row := env.DB.QueryRow(sqlStatement)
 	err = row.Scan(&currentThread.Id, &currentThread.Title, &currentThread.Author, &currentThread.Forum, &currentThread.Message, &currentThread.Votes, &currentThread.Slug, &currentThread.Created)
 
 	if err == nil {
@@ -222,15 +198,8 @@ func UpdateThreadDatails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetThreadPosts(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
+	var err error
 	params := r.URL.Query()
 	limit := params.Get("limit")
 	since := params.Get("since")
@@ -254,7 +223,7 @@ func GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 		sqlStatement = `SELECT id FROM thread WHERE slug = $1`
 	}
 
-	row := db.QueryRow(sqlStatement, vars["slug_or_id"])
+	row := env.DB.QueryRow(sqlStatement, vars["slug_or_id"])
 	scanErr := row.Scan(&curThreadId)
 
 	if scanErr != nil {
@@ -340,7 +309,7 @@ func GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 			fmt.Print("\n PARENT TREE getParentsQuery: ")
 			fmt.Print(getParentsQuery)
 
-			rows, queryErr := db.Query(getParentsQuery, vars["slug_or_id"])
+			rows, queryErr := env.DB.Query(getParentsQuery, vars["slug_or_id"])
 
 			if queryErr != nil {
 				fmt.Print("\n parent_tree err: ")
@@ -384,7 +353,7 @@ func GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 		fmt.Print(sqlStatement)
 	}
 
-	rows, queryErr := db.Query(sqlStatement, vars["slug_or_id"])
+	rows, queryErr := env.DB.Query(sqlStatement, vars["slug_or_id"])
 	if queryErr != nil {
 		fmt.Print("\n queryErr1: ")
 		fmt.Print(queryErr)

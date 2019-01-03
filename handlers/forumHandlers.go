@@ -7,21 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/vikks15/ForumAPI/structs"
-
 	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/vikks15/ForumAPI/structs"
 )
 
-func CreateForum(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) CreateForum(w http.ResponseWriter, r *http.Request) {
+	var err error
 	var newForum structs.Forum
 	json.NewDecoder(r.Body).Decode(&newForum) //request json to struct User
 	r.Body.Close()
@@ -30,11 +21,11 @@ func CreateForum(w http.ResponseWriter, r *http.Request) {
 	w.Header()["Date"] = nil
 
 	sqlStatement := `INSERT INTO forum (slug, title, usernick) VALUES ($1,$2,$3)`
-	_, err = db.Exec(sqlStatement, newForum.Slug, newForum.Title, newForum.User)
+	_, err = env.DB.Exec(sqlStatement, newForum.Slug, newForum.Title, newForum.User)
 
 	if err == nil {
 		//User case check
-		row := db.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newForum.User + "'")
+		row := env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newForum.User + "'")
 		scanErr := row.Scan(&newForum.User)
 		if scanErr != nil {
 			//fmt.Print(scanErr)
@@ -46,7 +37,7 @@ func CreateForum(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil && strings.Contains(err.Error(), "pq: duplicate key") {
 		w.WriteHeader(http.StatusConflict) //409
 		var existingForum structs.Forum
-		row := db.QueryRow("SELECT * FROM forum WHERE slug = '" + newForum.Slug + "'")
+		row := env.DB.QueryRow("SELECT * FROM forum WHERE slug = '" + newForum.Slug + "'")
 		scanErr := row.Scan(&existingForum.Slug, &existingForum.Title, &existingForum.User, &existingForum.Posts, &existingForum.Threads)
 		if scanErr != nil {
 			//fmt.Print(scanErr)
@@ -61,25 +52,17 @@ func CreateForum(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetForumDetails(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetForumDetails(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header()["Date"] = nil
 
-	row := db.QueryRow("SELECT * FROM forum WHERE slug = '" + vars["slug"] + "'")
+	row := env.DB.QueryRow("SELECT * FROM forum WHERE slug = '" + vars["slug"] + "'")
 	var currentForum structs.Forum
-	err = row.Scan(&currentForum.Slug, &currentForum.Title, &currentForum.User, &currentForum.Posts, &currentForum.Threads)
+	err := row.Scan(&currentForum.Slug, &currentForum.Title, &currentForum.User, &currentForum.Posts, &currentForum.Threads)
 
 	if err == nil {
-		row := db.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + currentForum.User + "'")
+		row := env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + currentForum.User + "'")
 		scanErr := row.Scan(&currentForum.User)
 		if scanErr != nil {
 			fmt.Print("/n getForumDetails get User err: ")
@@ -97,15 +80,8 @@ func GetForumDetails(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetThreads(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetThreads(w http.ResponseWriter, r *http.Request) {
+	var err error
 	params := r.URL.Query()
 	limit := params.Get("limit")
 	since := params.Get("since")
@@ -116,7 +92,7 @@ func GetThreads(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	forumRecord := ""
-	row := db.QueryRow("SELECT title FROM forum WHERE slug = '" + vars["slug"] + "'")
+	row := env.DB.QueryRow("SELECT title FROM forum WHERE slug = '" + vars["slug"] + "'")
 	forumScanErr := row.Scan(&forumRecord)
 
 	if forumScanErr != nil {
@@ -152,7 +128,7 @@ func GetThreads(w http.ResponseWriter, r *http.Request) {
 		sqlStatement += " limit " + limit
 	}
 
-	rows, queryErr := db.Query(sqlStatement)
+	rows, queryErr := env.DB.Query(sqlStatement)
 	if queryErr != nil {
 		//fmt.Print("\n queryErr: ")
 		//fmt.Print(queryErr)
@@ -183,15 +159,8 @@ func GetThreads(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetForumUsers(w http.ResponseWriter, r *http.Request) {
-	dbinfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		structs.DB_HOST, structs.DB_PORT, structs.DB_USER, structs.DB_PASSWORD, structs.DB_NAME)
-	db, err := sql.Open("postgres", dbinfo)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func (env *Env) GetForumUsers(w http.ResponseWriter, r *http.Request) {
+	var err error
 	params := r.URL.Query()
 	limit := params.Get("limit")
 	since := params.Get("since")
@@ -203,7 +172,7 @@ func GetForumUsers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	forumRecord := ""
 	qquery := "SELECT title FROM forum WHERE slug = '" + vars["slug_or_id"] + "'"
-	row := db.QueryRow(qquery)
+	row := env.DB.QueryRow(qquery)
 	forumScanErr := row.Scan(&forumRecord)
 
 	if forumScanErr != nil {
@@ -245,7 +214,7 @@ func GetForumUsers(w http.ResponseWriter, r *http.Request) {
 		sqlStatement += " limit " + limit
 	}
 
-	rows, queryErr := db.Query(sqlStatement, vars["slug_or_id"], vars["slug_or_id"])
+	rows, queryErr := env.DB.Query(sqlStatement, vars["slug_or_id"], vars["slug_or_id"])
 	if queryErr != nil {
 		fmt.Print("\n Get users queryErr: ")
 		fmt.Print(queryErr)
