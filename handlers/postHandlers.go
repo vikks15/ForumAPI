@@ -14,12 +14,11 @@ import (
 )
 
 func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
-	var err error
 	vars := mux.Vars(r)
 	var newPosts []structs.Post
 	var addedPosts []structs.Post
 	forumUpdateQuery := ""
-	err = json.NewDecoder(r.Body).Decode(&newPosts) //request json to struct User
+	err := json.NewDecoder(r.Body).Decode(&newPosts) //request json to struct User
 	r.Body.Close()
 	if err != nil {
 		fmt.Print(err)
@@ -34,6 +33,13 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 	var parentsId [6]int
 	i := 0
 	lastPostId := 0
+
+	tx, err := env.DB.Begin()
+	if err != nil {
+		fmt.Print(err)
+		fmt.Print("\n")
+		return
+	}
 
 	//get 5 parent posts
 	sqlStatement := "SELECT id FROM post ORDER BY id DESC LIMIT 1"
@@ -51,7 +57,6 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	i = 0
-
 	curPostThread := 0
 	curPostForum := ""
 
@@ -67,6 +72,8 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		fmt.Print("createPost NoThread err :")
 		log.Print(scanErr)
 		fmt.Print("\n")
+		tx.Rollback()
+
 		w.WriteHeader(http.StatusNotFound)
 		errorMsg := map[string]string{"message": "Can't find post thread by id: " + vars["slug_or_id"]}
 		response, _ := json.Marshal(errorMsg)
@@ -88,7 +95,13 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			fmt.Print("User case check: ")
 			log.Print(scanErr)
 			fmt.Print("/n")
-			//cant find user check?
+			tx.Rollback()
+
+			w.WriteHeader(http.StatusNotFound)
+			errorMsg := map[string]string{"message": "Can't find user " + post.Author + "\n"}
+			response, _ := json.Marshal(errorMsg)
+			w.Write(response)
+			return
 		}
 
 		if numOfPosts == 0 {
@@ -106,6 +119,8 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Print("\n Create post err in preInsert:")
 			fmt.Print(err)
+			tx.Rollback()
+
 			w.WriteHeader(http.StatusNotFound)
 			errorMsg := map[string]string{"message": "Can't find thread with id " + strconv.Itoa(post.Thread) + "\n"}
 			response, _ := json.Marshal(errorMsg)
@@ -123,12 +138,14 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 				fmt.Print("\n err in create new post with parent:")
 				fmt.Print(err)
 			}
+
 			if parentThread != post.Thread {
 				fmt.Print(err)
 				w.WriteHeader(http.StatusConflict)
 				errorMsg := map[string]string{"message": "Parent post was created in another thread"}
 				response, _ := json.Marshal(errorMsg)
 				w.Write(response)
+				tx.Rollback()
 				return
 			}
 			post.Path = strings.TrimRight(previousPath, "}") + "," + strconv.Itoa(post.Id) + "}"
@@ -146,6 +163,8 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Print("\n Create post update path err:")
 			fmt.Print(err)
+			tx.Rollback()
+			return
 		}
 
 		forumUpdateQuery = "UPDATE forum SET posts = posts + 1 WHERE slug = '" + post.Forum + "'"
@@ -155,6 +174,8 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			fmt.Print("forum Update posts num err:")
 			fmt.Print(err)
 			fmt.Print("\n")
+			tx.Rollback()
+			return
 		}
 
 		addedPosts = append(addedPosts, post)
@@ -166,6 +187,8 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 		numOfPosts++
 	}
+
+	tx.Commit()
 
 	if numOfPosts == 0 {
 		w.WriteHeader(http.StatusCreated)
