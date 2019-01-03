@@ -51,41 +51,45 @@ func CreateVote(w http.ResponseWriter, r *http.Request) {
 		response, _ := json.Marshal(errorMsg)
 		w.Write(response)
 		return
-		// row1 := db.QueryRow("SELECT id FROM thread ORDER BY id DESC LIMIT 1")
-		// scanErr = row1.Scan(&newVote.ThreadId)
 	}
 
-	sqlStatement = `INSERT INTO vote (nickname, voice, threadId) VALUES ($1,$2,$3)`
+	sqlStatement = `INSERT INTO vote (nickname, voice, threadId)
+					VALUES ($1,$2,$3)
+					ON CONFLICT (nickname, threadId) DO UPDATE
+					SET voice = $2`
 	_, err = db.Exec(sqlStatement, newVote.Nickname, newVote.Voice, newVote.ThreadId)
 
-	if err == nil {
+	if err != nil {
+		fmt.Print(err)
+		w.WriteHeader(http.StatusNotFound)
+		errorMsg := map[string]string{"message": "Can't find user or thread\n"}
+		response, _ := json.Marshal(errorMsg)
+		w.Write(response)
+		return
+	}
+
+	sqlStatement = `UPDATE thread SET votes = 
+					(select sum(voice) from vote where threadId = $1)
+					where id = $1`
+
+	_, err = db.Exec(sqlStatement, newVote.ThreadId)
+
+	if err != nil {
+		fmt.Print("update votedThreadErr: ")
+		fmt.Print(err)
+		fmt.Print("\n")
+	} else {
 		row := db.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM vote JOIN thread ON (threadId = id) where id = " + strconv.Itoa(newVote.ThreadId))
 		scanErr := row.Scan(&votedThread.Id, &votedThread.Title, &votedThread.Author, &votedThread.Forum, &votedThread.Message, &votedThread.Votes, &votedThread.Slug, &votedThread.Created)
 
 		if scanErr != nil {
-			fmt.Print("votedThreadErr: ")
+			fmt.Print("votedThread ScanErr: ")
 			fmt.Print(scanErr)
 			fmt.Print("\n")
 		}
 
-		if newVote.Voice == -1 {
-			sqlStatement = `UPDATE thread SET votes = votes-1 where slug = $1`
-			//votedThread.Votes--
-			votedThread.Votes = 1 //wrong here
-		} else if newVote.Voice == 1 {
-			sqlStatement = `UPDATE thread SET votes = votes+1 where slug = $1`
-			votedThread.Votes++
-		}
-		row = db.QueryRow(sqlStatement, votedThread.Slug)
-
 		w.WriteHeader(http.StatusOK)
 		response, _ := json.Marshal(votedThread)
-		w.Write(response)
-	} else {
-		fmt.Print(err)
-		w.WriteHeader(http.StatusNotFound)
-		errorMsg := map[string]string{"message": "Can't find user with id " + newVote.Nickname + "\n"}
-		response, _ := json.Marshal(errorMsg)
 		w.Write(response)
 	}
 }

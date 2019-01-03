@@ -58,5 +58,6 @@ CREATE TABLE vote(
 	threadId INT NOT NULL,
 	CONSTRAINT voteFK1 FOREIGN KEY (nickname) REFERENCES forumUser (nickname),
 	CONSTRAINT voteFK2 FOREIGN KEY (threadId) REFERENCES thread (Id),
-	CONSTRAINT voiceCheck CHECK (voice = -1 OR voice = 1)	
+	CONSTRAINT voiceCheck CHECK (voice = -1 OR voice = 1),
+	CONSTRAINT unique_vote UNIQUE (nickname, threadId)	
 );
