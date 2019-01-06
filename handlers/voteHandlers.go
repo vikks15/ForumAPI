@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/vikks15/ForumAPI/structs"
@@ -60,44 +61,95 @@ func (env *Env) CreateVote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//---------------------------------------------
-	sqlStatement = `INSERT INTO vote (nickname, voice, threadId)
-	VALUES ($1,$2,$3)
-	ON CONFLICT (nickname, threadId) DO UPDATE
-	SET voice = $2`
-	_, err = tx.Exec(sqlStatement, newVote.Nickname, newVote.Voice, newVote.ThreadId)
+	voteInc := 42
 
+	stmt, err := tx.Prepare(`INSERT INTO vote (nickname, voice, threadId)
+							VALUES ($1,$2,$3);`)
 	if err != nil {
 		fmt.Print(err)
+		return
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(newVote.Nickname, newVote.Voice, newVote.ThreadId)
+
+	if (err != nil) && (strings.Contains(err.Error(), "foreign key constraint")) {
+		fmt.Print(err)
 		w.WriteHeader(http.StatusNotFound)
-		errorMsg := map[string]string{"message": "Can't find user or thread\n"}
+		errorMsg := map[string]string{"message": "Can't find user\n"}
 		response, _ := json.Marshal(errorMsg)
 		w.Write(response)
 		return
 	}
 
-	sqlStatement = `UPDATE thread SET votes = 
-		(select sum(voice) from vote where threadId = $1)
-		where id = $1`
+	if (err != nil) && (strings.Contains(err.Error(), "unique constraint")) {
+		tx.Rollback()
+		tx, err = env.DB.Begin()
 
-	_, err = tx.Exec(sqlStatement, newVote.ThreadId)
-
-	if err != nil {
-		fmt.Print("update votedThreadErr: ")
-		fmt.Print(err)
-		fmt.Print("\n")
-	} else {
-		row := tx.QueryRow("SELECT id, title, author, forum, message, votes, slug, created FROM vote JOIN thread ON (threadId = id) where id = " + strconv.Itoa(newVote.ThreadId))
-		scanErr := row.Scan(&votedThread.Id, &votedThread.Title, &votedThread.Author, &votedThread.Forum, &votedThread.Message, &votedThread.Votes, &votedThread.Slug, &votedThread.Created)
-
-		if scanErr != nil {
-			fmt.Print("votedThread ScanErr: ")
-			fmt.Print(scanErr)
+		if err != nil {
+			fmt.Print(err)
 			fmt.Print("\n")
+			return
 		}
 
-		tx.Commit()
-		w.WriteHeader(http.StatusOK)
-		response, _ := json.Marshal(votedThread)
-		w.Write(response)
+		curVoice := 0
+		sqlStatement = `SELECT voice FROM vote
+						WHERE nickname = $1 AND threadId = $2`
+
+		row := tx.QueryRow(sqlStatement, newVote.Nickname, newVote.ThreadId)
+		scanErr = row.Scan(&curVoice)
+
+		if scanErr != nil {
+			fmt.Print("CurVoice scanErr: " + scanErr.Error() + "\n")
+			return
+		}
+
+		if curVoice != newVote.Voice { //change of voice
+			sqlStatement = `UPDATE vote SET voice = $1
+							WHERE nickname = $2 AND threadId = $3`
+
+			_, err = tx.Exec(sqlStatement, newVote.Voice, newVote.Nickname, newVote.ThreadId)
+
+			if err != nil {
+				fmt.Print("update voice err: ")
+				fmt.Print(err)
+				fmt.Print("\n")
+				return
+			}
+
+			if newVote.Voice == 1 {
+				voteInc = 2
+			} else if newVote.Voice == -1 {
+				voteInc = -2
+			}
+
+		} else { //same voice
+			voteInc = 0
+		}
+	} else if err != nil {
+		fmt.Print(err)
+		fmt.Print("\n")
+		return
 	}
+
+	if voteInc == 42 { // new voice inserted
+		voteInc = newVote.Voice
+	}
+
+	sqlStatement = `UPDATE thread SET votes = votes + $1 WHERE id = $2 RETURNING *`
+	row = tx.QueryRow(sqlStatement, voteInc, newVote.ThreadId)
+	scanErr = row.Scan(&votedThread.Id, &votedThread.Title, &votedThread.Author, &votedThread.Forum,
+		&votedThread.Message, &votedThread.Votes, &votedThread.Slug, &votedThread.Created)
+
+	if scanErr != nil {
+		fmt.Print("update Thread ScanErr: ")
+		fmt.Print(scanErr)
+		fmt.Print("\n")
+		return
+	}
+
+	tx.Commit()
+	w.WriteHeader(http.StatusOK)
+	response, _ := json.Marshal(votedThread)
+	w.Write(response)
 }

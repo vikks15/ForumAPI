@@ -40,6 +40,14 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		fmt.Print("\n")
 		return
 	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("SET LOCAL synchronous_commit = OFF")
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//get 5 parent posts
 	sqlStatement := "SELECT id FROM post ORDER BY id DESC LIMIT 1"
@@ -72,7 +80,6 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		fmt.Print("createPost NoThread err :")
 		log.Print(scanErr)
 		fmt.Print("\n")
-		tx.Rollback()
 
 		w.WriteHeader(http.StatusNotFound)
 		errorMsg := map[string]string{"message": "Can't find post thread by id: " + vars["slug_or_id"]}
@@ -88,7 +95,7 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		previousPath := ""
 
 		//---------------------User case check--------------
-		row := env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + post.Author + "'")
+		row := tx.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + post.Author + "'")
 		scanErr := row.Scan(&post.Author)
 
 		if scanErr != nil {
@@ -113,13 +120,22 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		sqlStatement = `INSERT INTO post (author, message, thread, forum, created, parent)
 		VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
 
-		preInsertRow := env.DB.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		// preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		// err = preInsertRow.Scan(&post.Id)
+
+		stmt, err := tx.Prepare(sqlStatement)
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		defer stmt.Close()
+
+		preInsertRow := stmt.QueryRow(post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		err = preInsertRow.Scan(&post.Id)
 
 		if err != nil {
 			fmt.Print("\n Create post err in preInsert:")
 			fmt.Print(err)
-			tx.Rollback()
 
 			w.WriteHeader(http.StatusNotFound)
 			errorMsg := map[string]string{"message": "Can't find thread with id " + strconv.Itoa(post.Thread) + "\n"}
@@ -131,7 +147,7 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 		if strconv.Itoa(post.Parent) != "0" {
 			sqlStatement = "SELECT thread, path FROM post where id = " + strconv.Itoa(post.Parent)
-			row := env.DB.QueryRow(sqlStatement)
+			row := tx.QueryRow(sqlStatement)
 			err = row.Scan(&parentThread, &previousPath)
 
 			if err != nil {
@@ -145,7 +161,6 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 				errorMsg := map[string]string{"message": "Parent post was created in another thread"}
 				response, _ := json.Marshal(errorMsg)
 				w.Write(response)
-				tx.Rollback()
 				return
 			}
 			post.Path = strings.TrimRight(previousPath, "}") + "," + strconv.Itoa(post.Id) + "}"
@@ -158,23 +173,21 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		SET path = $1
 		WHERE id = $2`
 		//_, err = db.Exec(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
-		_, err = env.DB.Exec(sqlStatement, post.Path, post.Id)
+		_, err = tx.Exec(sqlStatement, post.Path, post.Id)
 
 		if err != nil {
 			fmt.Print("\n Create post update path err:")
 			fmt.Print(err)
-			tx.Rollback()
 			return
 		}
 
 		forumUpdateQuery = "UPDATE forum SET posts = posts + 1 WHERE slug = '" + post.Forum + "'"
-		_, err = env.DB.Exec(forumUpdateQuery)
+		_, err = tx.Exec(forumUpdateQuery)
 
 		if err != nil {
 			fmt.Print("forum Update posts num err:")
 			fmt.Print(err)
 			fmt.Print("\n")
-			tx.Rollback()
 			return
 		}
 

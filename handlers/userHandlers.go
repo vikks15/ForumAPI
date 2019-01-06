@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -110,7 +111,6 @@ func (env *Env) UserProfileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (env *Env) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var err error
 	vars := mux.Vars(r)
 	var newUser structs.User
 	newUser.Nickname = vars["nickname"]
@@ -120,16 +120,29 @@ func (env *Env) CreateUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header()["Date"] = nil
 
+	tx, err := env.DB.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer tx.Rollback()
+
+	// _, err = tx.Exec("SET LOCAL synchronous_commit = OFF")
+
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+
 	sqlStatement := `INSERT INTO forumUser (nickname, fullname, about, email) VALUES ($1,$2,$3,$4)`
-	//_, err = db.Exec("INSERT INTO forumUser (nickname, fullname, about, email) VALUES ('" + newUser.Nickname + "','" + newUser.FullName + "','" + newUser.About + "','" + newUser.Email + "');")
-	_, err = env.DB.Exec(sqlStatement, newUser.Nickname, newUser.FullName, newUser.About, newUser.Email)
+	_, err = tx.Exec(sqlStatement, newUser.Nickname, newUser.FullName, newUser.About, newUser.Email)
 
 	if err != nil {
-		//fmt.Println(err.Error())
+		tx.Rollback()
+		fmt.Println(err)
 		w.WriteHeader(http.StatusConflict)
-		var existingUser1 structs.User
-		var existingUser2 structs.User
-		//row := db.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "' OR nickname = '" + newUser.Nickname + "'")
+
+		var existingUser1, existingUser2 structs.User
 		row1 := env.DB.QueryRow("SELECT * FROM forumUser WHERE email = '" + newUser.Email + "'")
 		row2 := env.DB.QueryRow("SELECT * FROM forumUser WHERE nickname = '" + newUser.Nickname + "'")
 		_ = row1.Scan(&existingUser1.Nickname, &existingUser1.FullName, &existingUser1.About, &existingUser1.Email)
@@ -154,6 +167,7 @@ func (env *Env) CreateUser(w http.ResponseWriter, r *http.Request) {
 		result, _ := json.Marshal(arr)
 		w.Write(result)
 	} else {
+		tx.Commit()
 		result, _ := json.Marshal(newUser)
 		w.WriteHeader(http.StatusCreated)
 		w.Write(result)
