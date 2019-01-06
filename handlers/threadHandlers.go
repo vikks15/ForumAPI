@@ -13,7 +13,6 @@ import (
 )
 
 func (env *Env) CreateThread(w http.ResponseWriter, r *http.Request) {
-	//vars := mux.Vars(r)
 	var err error
 	var newThread structs.Thread
 	forumUpdateQuery := ""
@@ -23,12 +22,22 @@ func (env *Env) CreateThread(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header()["Date"] = nil
 
-	sqlStatement := `INSERT INTO thread (title, author, forum, message, slug, created) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
-	row := env.DB.QueryRow(sqlStatement, newThread.Title, newThread.Author, newThread.Forum, newThread.Message, newThread.Slug, newThread.Created.UTC())
-	err = row.Scan(&newThread.Id)
+	tx, err := env.DB.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("SET LOCAL synchronous_commit = OFF")
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//---------------User case check-----------------
-	row = env.DB.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newThread.Author + "'")
+	row := tx.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + newThread.Author + "'")
 	scanErr := row.Scan(&newThread.Author)
 
 	if scanErr != nil || newThread.Author == "" {
@@ -42,34 +51,37 @@ func (env *Env) CreateThread(w http.ResponseWriter, r *http.Request) {
 	}
 	//------------------------------------------------
 
+	sqlStatement := `INSERT INTO thread (title, author, forum, message, slug, created) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
+	row = tx.QueryRow(sqlStatement, newThread.Title, newThread.Author, newThread.Forum, newThread.Message, newThread.Slug, newThread.Created.UTC())
+	err = row.Scan(&newThread.Id)
+
 	if err == nil {
 		//Forum case check
-		row = env.DB.QueryRow("SELECT slug FROM forum WHERE slug = '" + newThread.Forum + "'")
+		row = tx.QueryRow("SELECT slug FROM forum WHERE slug = '" + newThread.Forum + "'")
 		scanErr = row.Scan(&newThread.Forum)
 
 		if scanErr != nil {
 			fmt.Print("\nForum check in createThread err: ")
-			fmt.Print(scanErr)
-			fmt.Print("\n")
+			fmt.Println(scanErr)
 		}
 
 		forumUpdateQuery = "UPDATE forum SET threads = threads + 1 WHERE slug = '" + newThread.Forum + "'"
-		_, err = env.DB.Exec(forumUpdateQuery)
+		_, err = tx.Exec(forumUpdateQuery)
 
 		if err != nil {
 			fmt.Print("forum Update threads num err:")
-			fmt.Print(err)
-			fmt.Print("\n")
+			fmt.Println(err)
 		}
 
+		tx.Commit()
 		w.WriteHeader(http.StatusCreated) //201
 		response, _ := json.Marshal(newThread)
 		w.Write(response)
 
 	} else if (err != nil) && (strings.Contains(err.Error(), "pq: duplicate key")) {
+		tx.Rollback()
 		fmt.Print(" err :")
-		log.Print(err)
-		fmt.Print("\n")
+		log.Println(err)
 		w.WriteHeader(http.StatusConflict) //409
 		var existingThread structs.Thread
 		existingThread.Id = newThread.Id
@@ -78,26 +90,24 @@ func (env *Env) CreateThread(w http.ResponseWriter, r *http.Request) {
 
 		if scanErr1 != nil {
 			fmt.Print("Scan err1:")
-			log.Print(scanErr1)
-			fmt.Print("\n")
+			log.Println(scanErr1)
 		}
 
 		response, _ := json.Marshal(existingThread)
 		w.Write(response)
 
 	} else if (err != nil) && (strings.Contains(err.Error(), "threadfk2")) {
-		fmt.Print(" err :")
-		log.Print(err)
-		fmt.Print("\n")
+		tx.Rollback()
+		fmt.Print("Create thread threadfk2 err:")
+		log.Println(err)
 
 		var existingThread structs.Thread
 		row := env.DB.QueryRow("SELECT id, title, author, forum, message, slug, created FROM thread WHERE slug = '" + newThread.Slug + "'")
 		scanErr2 := row.Scan(&existingThread.Id, &existingThread.Title, &existingThread.Author, &existingThread.Forum, &existingThread.Message, &existingThread.Slug, &existingThread.Created)
 
 		if scanErr2 != nil {
-			fmt.Print("Scan err2:")
-			log.Print(scanErr2)
-			fmt.Print("\n")
+			fmt.Print("Create thread scan err2:")
+			log.Println(scanErr2)
 			w.WriteHeader(http.StatusNotFound) //404
 			errorMsg := map[string]string{"message": "Can't find user with id " + newThread.Author + "\n"}
 			response, _ := json.Marshal(errorMsg)
