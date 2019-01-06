@@ -21,8 +21,7 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&newPosts) //request json to struct User
 	r.Body.Close()
 	if err != nil {
-		fmt.Print(err)
-		fmt.Print("\n")
+		fmt.Println(err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -30,14 +29,11 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	currentTime := time.Now()
 	numOfPosts := 0
-	var parentsId [6]int
-	i := 0
-	lastPostId := 0
+	sqlStatement := ""
 
 	tx, err := env.DB.Begin()
 	if err != nil {
-		fmt.Print(err)
-		fmt.Print("\n")
+		fmt.Println(err)
 		return
 	}
 	defer tx.Rollback()
@@ -49,22 +45,6 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//get 5 parent posts
-	sqlStatement := "SELECT id FROM post ORDER BY id DESC LIMIT 1"
-	row1 := env.DB.QueryRow(sqlStatement)
-
-	err = row1.Scan(&lastPostId)
-	if err != nil {
-		fmt.Print("\n err in parents Id:")
-		fmt.Print(err)
-	}
-
-	for i = 0; i < 5; i++ {
-		parentsId[i] = lastPostId
-		lastPostId--
-	}
-
-	i = 0
 	curPostThread := 0
 	curPostForum := ""
 
@@ -73,16 +53,16 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sqlStatement = "SELECT id, forum FROM thread WHERE slug = '" + vars["slug_or_id"] + "'"
 	}
-	row1 = env.DB.QueryRow(sqlStatement)
-	scanErr := row1.Scan(&curPostThread, &curPostForum)
+	row := tx.QueryRow(sqlStatement)
+	scanErr := row.Scan(&curPostThread, &curPostForum)
 
 	if scanErr != nil {
 		fmt.Print("createPost NoThread err :")
-		log.Print(scanErr)
-		fmt.Print("\n")
+		log.Println(scanErr)
 
 		w.WriteHeader(http.StatusNotFound)
-		errorMsg := map[string]string{"message": "Can't find post thread by id: " + vars["slug_or_id"]}
+		//errorMsg := map[string]string{"message": "Can't find post thread by id: " + vars["slug_or_id"]}
+		errorMsg := map[string]string{"message": "Can't find thread with slug or id " + vars["slug_or_id"] + "\n"}
 		response, _ := json.Marshal(errorMsg)
 		w.Write(response)
 		return
@@ -95,14 +75,13 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		previousPath := ""
 
 		//---------------------User case check--------------
+		sqlStatement = `SELECT nickname FROM forumUser WHERE nickname = $1`
 		row := tx.QueryRow("SELECT nickname FROM forumUser WHERE nickname = '" + post.Author + "'")
 		scanErr := row.Scan(&post.Author)
 
 		if scanErr != nil {
 			fmt.Print("User case check: ")
-			log.Print(scanErr)
-			fmt.Print("/n")
-			tx.Rollback()
+			log.Println(scanErr)
 
 			w.WriteHeader(http.StatusNotFound)
 			errorMsg := map[string]string{"message": "Can't find user " + post.Author + "\n"}
@@ -116,35 +95,18 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 		post.Created = currentTime
 
-		//---------------preInsert to get post id------------------
+		//-----------------------------------preInsert to get post id--------------------------------
 		sqlStatement = `INSERT INTO post (author, message, thread, forum, created, parent)
-		VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
-
-		// preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
-		// err = preInsertRow.Scan(&post.Id)
-
-		stmt, err := tx.Prepare(sqlStatement)
-		if err != nil {
-			fmt.Print(err)
-			return
-		}
-		defer stmt.Close()
-
-		preInsertRow := stmt.QueryRow(post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+						VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
+		preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		err = preInsertRow.Scan(&post.Id)
 
 		if err != nil {
 			fmt.Print("\n Create post err in preInsert:")
-			fmt.Print(err)
-
-			w.WriteHeader(http.StatusNotFound)
-			errorMsg := map[string]string{"message": "Can't find thread with id " + strconv.Itoa(post.Thread) + "\n"}
-			response, _ := json.Marshal(errorMsg)
-			w.Write(response)
+			fmt.Println(err)
 			return
 		}
-		//--------------------------------------------------------
-
+		//-------------------------------------------------------------------------------------------
 		if strconv.Itoa(post.Parent) != "0" {
 			sqlStatement = "SELECT thread, path FROM post where id = " + strconv.Itoa(post.Parent)
 			row := tx.QueryRow(sqlStatement)
@@ -168,10 +130,7 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			post.Path = "{" + strconv.Itoa(post.Id) + "}"
 		}
 
-		sqlStatement = `
-		UPDATE post
-		SET path = $1
-		WHERE id = $2`
+		sqlStatement = `UPDATE post SET path = $1 WHERE id = $2`
 		//_, err = db.Exec(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		_, err = tx.Exec(sqlStatement, post.Path, post.Id)
 
@@ -181,35 +140,28 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		forumUpdateQuery = "UPDATE forum SET posts = posts + 1 WHERE slug = '" + post.Forum + "'"
-		_, err = tx.Exec(forumUpdateQuery)
-
-		if err != nil {
-			fmt.Print("forum Update posts num err:")
-			fmt.Print(err)
-			fmt.Print("\n")
-			return
-		}
-
 		addedPosts = append(addedPosts, post)
-
-		if i == 5 {
-			i = 0
-		} else {
-			i++
-		}
 		numOfPosts++
 	}
 
-	tx.Commit()
-
 	if numOfPosts == 0 {
+		tx.Commit()
 		w.WriteHeader(http.StatusCreated)
 		var emptyPostArr [0]structs.Post
 		response, _ := json.Marshal(emptyPostArr)
 		w.Write(response)
 		return
 	} else {
+		forumUpdateQuery = `UPDATE forum SET posts = posts + $1 WHERE slug = $2`
+		_, err = tx.Exec(forumUpdateQuery, numOfPosts, curPostForum)
+
+		if err != nil {
+			fmt.Print("forum Update posts num err:")
+			fmt.Println(err)
+			return
+		}
+
+		tx.Commit()
 		w.WriteHeader(http.StatusCreated)
 		response, _ := json.Marshal(addedPosts)
 		w.Write(response)
