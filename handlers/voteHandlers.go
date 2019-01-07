@@ -63,15 +63,9 @@ func (env *Env) CreateVote(w http.ResponseWriter, r *http.Request) {
 	//---------------------------------------------
 	voteInc := 42
 
-	stmt, err := tx.Prepare(`INSERT INTO vote (nickname, voice, threadId)
-							VALUES ($1,$2,$3);`)
-	if err != nil {
-		fmt.Print(err)
-		return
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(newVote.Nickname, newVote.Voice, newVote.ThreadId)
+	sqlStatement = `INSERT INTO vote (nickname, voice, threadId)
+	 				VALUES ($1,$2,$3)`
+	 _, err = env.DB.Exec(sqlStatement, newVote.Nickname, newVote.Voice, newVote.ThreadId)
 
 	if (err != nil) && (strings.Contains(err.Error(), "foreign key constraint")) {
 		fmt.Print(err)
