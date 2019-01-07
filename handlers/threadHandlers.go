@@ -273,7 +273,7 @@ func (env *Env) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if desc == "true" {
-			fmt.Print("sort flat, desc")
+			//fmt.Print("sort flat, desc")
 			sqlStatement += " order by P.Id DESC "
 		} else {
 			sqlStatement += " order by created, P.Id "
@@ -316,8 +316,8 @@ func (env *Env) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 				getParentsQuery += ` LIMIT ` + limit
 			}
 
-			fmt.Print("\n PARENT TREE getParentsQuery: ")
-			fmt.Print(getParentsQuery)
+			//fmt.Print("\n PARENT TREE getParentsQuery: ")
+			//fmt.Print(getParentsQuery)
 
 			rows, queryErr := env.DB.Query(getParentsQuery, vars["slug_or_id"])
 
@@ -353,14 +353,14 @@ func (env *Env) GetThreadPosts(w http.ResponseWriter, r *http.Request) {
 			sqlStatement += " ORDER BY path "
 		}
 
-		fmt.Print("\n PARENT TREE LIMIT : ")
-		fmt.Print(sqlStatement)
+		//fmt.Print("\n PARENT TREE LIMIT : ")
+		//fmt.Print(sqlStatement)
 	}
 
 	if limit != "" && sort != "parent_tree" {
 		sqlStatement += " limit " + limit
-		fmt.Print("\n query: ")
-		fmt.Print(sqlStatement)
+		//fmt.Print("\n query: ")
+		//fmt.Print(sqlStatement)
 	}
 
 	rows, queryErr := env.DB.Query(sqlStatement, vars["slug_or_id"])

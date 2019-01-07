@@ -72,7 +72,7 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 		if numOfPosts == 0 {
 			currentTime = time.Now().UTC()
 		}
-		post.Created = currentTime
+		post.Created = currentTime.Round(time.Millisecond)
 
 		post.Thread = curPostThread
 		post.Forum = curPostForum
