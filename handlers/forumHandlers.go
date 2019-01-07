@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -108,7 +107,6 @@ func (env *Env) GetThreads(w http.ResponseWriter, r *http.Request) {
 
 	var threadsArr []structs.Thread
 	var currentThread structs.Thread
-	var tmpVotes sql.NullInt64
 
 	sqlStatement := "SELECT * FROM thread WHERE forum = '" + vars["slug"] + "'"
 
@@ -136,16 +134,13 @@ func (env *Env) GetThreads(w http.ResponseWriter, r *http.Request) {
 
 	rowsNum := 0
 	for rows.Next() {
-		err = rows.Scan(&currentThread.Id, &currentThread.Title, &currentThread.Author, &currentThread.Forum, &currentThread.Message, &tmpVotes, &currentThread.Slug, &currentThread.Created)
-		if !tmpVotes.Valid {
-			currentThread.Votes = 0
-		}
+		err = rows.Scan(&currentThread.Id, &currentThread.Title, &currentThread.Author, &currentThread.Forum, &currentThread.Message, &currentThread.Votes, &currentThread.Slug, &currentThread.Created)
+
 		if err != nil {
-			//fmt.Print("\n soo:")
-			//fmt.Print(err)
+			fmt.Print("GetThreads scanErr:")
+			fmt.Print(err)
 		}
 		rowsNum++
-		//currentThread.Id = 42
 		threadsArr = append(threadsArr, currentThread)
 	}
 

@@ -14,10 +14,14 @@ import (
 )
 
 func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
+	currentTime := time.Now()
 	vars := mux.Vars(r)
 	var newPosts []structs.Post
 	var addedPosts []structs.Post
 	forumUpdateQuery := ""
+	numOfPosts := 0
+	sqlStatement := ""
+
 	err := json.NewDecoder(r.Body).Decode(&newPosts) //request json to struct User
 	r.Body.Close()
 	if err != nil {
@@ -26,10 +30,6 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header()["Date"] = nil
-
-	currentTime := time.Now()
-	numOfPosts := 0
-	sqlStatement := ""
 
 	tx, err := env.DB.Begin()
 	if err != nil {
@@ -69,6 +69,11 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, post := range newPosts {
+		if numOfPosts == 0 {
+			currentTime = time.Now().UTC()
+		}
+		post.Created = currentTime
+
 		post.Thread = curPostThread
 		post.Forum = curPostForum
 		parentThread := 0
@@ -90,15 +95,20 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if numOfPosts == 0 {
-			currentTime = time.Now().UTC()
-		}
-		post.Created = currentTime
-
 		//-----------------------------------preInsert to get post id--------------------------------
 		sqlStatement = `INSERT INTO post (author, message, thread, forum, created, parent)
 						VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
-		preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		// preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		// err = preInsertRow.Scan(&post.Id)
+
+		stmt, err := tx.Prepare(sqlStatement)
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		defer stmt.Close()
+
+		preInsertRow := stmt.QueryRow(post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		err = preInsertRow.Scan(&post.Id)
 
 		if err != nil {
