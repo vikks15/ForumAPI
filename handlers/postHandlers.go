@@ -94,21 +94,10 @@ func (env *Env) CreatePost(w http.ResponseWriter, r *http.Request) {
 			w.Write(response)
 			return
 		}
-
 		//-----------------------------------preInsert to get post id--------------------------------
 		sqlStatement = `INSERT INTO post (author, message, thread, forum, created, parent)
 						VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`
-		// preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
-		// err = preInsertRow.Scan(&post.Id)
-
-		stmt, err := tx.Prepare(sqlStatement)
-		if err != nil {
-			fmt.Print(err)
-			return
-		}
-		defer stmt.Close()
-
-		preInsertRow := stmt.QueryRow(post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
+		preInsertRow := tx.QueryRow(sqlStatement, post.Author, post.Message, post.Thread, post.Forum, post.Created, post.Parent)
 		err = preInsertRow.Scan(&post.Id)
 
 		if err != nil {
